@@ -92,16 +92,17 @@ pars <- list(
              station_split = FALSE,
              cube_fringe = "constant",
              cpu = 1 / 11,
+             heapspace = 4 * 4096,
              remove_temp = TRUE,
              packages = "eseis"),
   
-  path = list(storage = paste0("/data/STORAGE/Seismic/Europe/Germany/nn/",
+  path = list(storage = paste0("/data/STORAGE/Seismic/continent/country/site/",
                                "data/seismic/"),
               temp = paste0("/data/DATA/usernam/00_TEMP/"),
               gipptools = paste0("/software/gipptools-2022.171/"),
-              station = paste0("/data/STORAGE/Seismic/Europe/Germany/",
-                               "nn/data/seismic/station/",
-                               "station_info_nn.txt")))
+              station = paste0("/data/STORAGE/Seismic/continent/country/",
+                               "site/data/seismic/station/",
+                               "station_info_service.txt")))
 
 ## PART 2 - PREPARATION OF DATA -----------------------------------------------
 
@@ -145,6 +146,9 @@ stations_cube <- stations_cube[is.na(match(x = stations_cube$ID,
 stations_cube <- stations_cube[stations_cube$service == as.numeric(
   gsub(x = pars$opt$service, pattern = "service_", replacement = "")),]
 
+## isolate duplicate entries based on logger ID
+stations_cube <- stations_cube[!duplicated(x = stations_cube$logger_ID),]
+
 ## write updated station info file to temporary directory
 write.table(x = stations_cube, 
             file = paste0(temp_station, 
@@ -158,7 +162,7 @@ aux_organisecubefiles(stationfile = paste0(temp_station,
                                          pars$opt$service),
                       output_dir = temp_sac,
                       gipptools = pars$path$gipptools,
-                      heapspace = 4 * 4096,
+                      heapspace = pars$opt$heapspace,
                       verbose = pars$opt$cube_verbose,
                       fringe = pars$opt$cube_fringe, 
                       cpu = pars$opt$cpu)
@@ -260,7 +264,7 @@ if(nrow(stations_centaur) > 0) {
           
           dir.create(paste0(temp_sac, "/", y))
         }
-
+        
         if(dir.exists(paste0(temp_sac, "/", yjd)) == FALSE) {
           
           dir.create(paste0(temp_sac, "/", yjd))
@@ -285,51 +289,60 @@ if(nrow(stations_centaur) > 0) {
 }
 
 ## optionally prepare split channel files -------------------------------------
-# if(pars$opt$station_split == TRUE) {
-# 
-#   ## make list of sac files
-#   files_sac_in <- list.files(path = temp_sac, 
-#                              recursive = TRUE, 
-#                              full.names = TRUE)
-#   
-#   
-#   ## process sac files
-#   for(i in 1:length(files_sac_in)) {
-#     
-#     ## print progress
-#     print(i)
-#     
-#     ## load file
-#     s <- read_sac(file = files_sac_in[i])
-#     
-#     ## get meta data
-#     cmp <- s$meta$component
-#     sta <- s$meta$station
-#     
-#     ## get corresponding new meta data
-#     ID_out <- stations_split$ID[which(stations_split$ID_raw == sta & 
-#                                         stations_split$chn_cube == cmp)]
-#     
-#     meta_split <- stations_split[stations_split$ID == ID_out,]
-#     
-#     ## update meta data
-#     s$meta$station <- meta_split$ID
-#     s$meta$component <- meta_split$ID <- "BHZ"
-#     
-#     ## create new file name
-#     s_name <- paste0(temp_sac, "/", 
-#                      format(s$meta$starttime, "%Y/%j"), "/",
-#                      s$meta$station, ".",
-#                      format(s$meta$starttime, "%y.%j.%H.%M.%S."),
-#                      s$meta$component, ".SAC")
-#     
-#     ## write sac file
-#     write_sac(data = s, file = s_name, unit = "unknown")
-#   }
-#   
-#   ## delete original sac files
-#   for(i in 1:length(files_sac_in)) {
-#     
-#     unlink(x = files_sac_in[i], recursive = TRUE)
-#   }
-# }
+if(pars$opt$station_split == TRUE) {
+  
+  ## make list of sac files
+  files_sac_in <- list.files(path = temp_sac,
+                             recursive = TRUE,
+                             full.names = TRUE)
+  
+  ## extract channel info data
+  match_id <- sapply(stations$id_chn_cube, function(x) {
+    strsplit(x = x, split = "_", fixed = TRUE)[[1]][1]
+  })
+  match_chn <- sapply(stations$id_chn_cube, function(x) {
+    strsplit(x = x, split = "_", fixed = TRUE)[[1]][2]
+  })
+  match_id_chn <- data.frame(id_old = as.character(stations$ID),
+                             id_new = as.character(match_id),
+                             chn = as.character(match_chn), 
+                             stringsAsFactors = FALSE)
+  
+  ## process sac files
+  for(i in 1:length(files_sac_in)) {
+    
+    ## print progress
+    print(i)
+    
+    ## load file
+    s <- read_sac(file = files_sac_in[i])
+    
+    ## get meta data
+    sta <- s$meta$station
+    cmp <- s$meta$component
+    
+    ## get matching new ID
+    id_out <- which(sta == match_id_chn$id_old & cmp == match_id_chn$chn)
+    
+    ## progress only if case exists
+    if(length(id_out) == 1) {
+      
+      ## update meta data
+      s$meta$station <- match_id_chn$id_new[id_out]
+      s$meta$component <- "BHZ"
+      
+      ## create new file name
+      s_name <- paste0(temp_sac, "/",
+                       format(s$meta$starttime, "%Y/%j"), "/",
+                       s$meta$station, ".",
+                       format(s$meta$starttime, "%y.%j.%H.%M.%S."),
+                       s$meta$component, ".SAC")
+      
+      ## write new sac file
+      write_sac(data = s, file = s_name, unit = "unknown")
+      
+      ## delete old sac file
+      unlink(x = files_sac_in[i], recursive = TRUE)
+    }
+  }
+}
