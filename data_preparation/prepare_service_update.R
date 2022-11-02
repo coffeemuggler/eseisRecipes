@@ -81,6 +81,30 @@
 #'       each lines containing an entry of a station and service. The routine 
 #'       will isolate the stations to process based on the correctly specified 
 #'       service number and exclude the stations to be excluded (see above).
+#'       
+#' Example station info file, note that ID will be made to file name for each 
+#' output sac file by channel, e.g., STA1.22.101.10.00.00.BHZ.SAC. However, if 
+#' par$opt$station_split is TRUE, the script will re-organise those sac files 
+#' again. It will change the meta data and file names according to the station
+#' info file column "id_chn_cube", hence turning the BHE channel STA1 to STA1b
+#' and the meta$component to "BHZ". Thus, make sure that in column id_chn_cube 
+#' the assignments of channel match those in column "Cube_chn". 
+#' 
+#' Also not that the example station info file contains many more information 
+#' like sampling rate, logger type, sensor type and gain - parameters that may 
+#' change during a long deployment period. Thus, with every station maintenance 
+#' service, append a new set of lines to the file, updating the service number
+#' and possibly other changes (e.g. if before a service the logger had been 
+#' replaced and a new sensor and gain setup is used, all those relevant 
+#' information need to be updated.)
+#' 
+#' "ID" "name" "x" "y" "z" "d" "sensor_type" "logger_type" "sensor_ID" "logger_ID" "Cube_chn" "gain" "n_channel" "f_data" "service" "id_chn_cube" "service"
+#' "STA1" "dummy_name_a" 1010101 3010101 100 0.5 "PE6B" "Cube3ext" "NA" "BP5" "BHZ" 32 1 200 01 "STA1a_BHZ" 02
+#' "STA1" "dummy_name_b" 1010102 3010102 100 0.5 "PE6B" "Cube3ext" "NA" "BP5" "BHE" 32 1 200 01 "STA1b_BHE" 02
+#' "STA1" "dummy_name_c" 1010103 3010103 100 0.5 "PE6B" "Cube3ext" "NA" "BP5" "BHN" 32 1 200 01 "STA1c_BHN" 02
+#' "STA2" "dummy_name_d" 1010104 3010104 100 0.5 "PE6B" "Cube3ext" "NA" "BP4" "BHZ" 32 1 200 01 "STA2a_BHZ" 02
+#' "STA2" "dummy_name_e" 1010105 3010105 100 0.5 "PE6B" "Cube3ext" "NA" "BP4" "BHE" 32 1 200 01 "STA2b_BHE" 02
+#' "STA2" "dummy_name_f" 1010106 3010106 100 0.5 "PE6B" "Cube3ext" "NA" "BP4" "BHN" 32 1 200 01 "STA2c_BHN" 02
 
 ## PART 1 - SETTINGS SECTION --------------------------------------------------
 
@@ -307,6 +331,7 @@ if(pars$opt$station_split == TRUE) {
                              id_new = as.character(match_id),
                              chn = as.character(match_chn), 
                              stringsAsFactors = FALSE)
+  match_id_chn <- na.exclude(match_id_chn)
   
   ## process sac files
   for(i in 1:length(files_sac_in)) {
